@@ -1735,46 +1735,40 @@
             return best;
         }
 
-        async function prepareExportWidgetLayout(pdfWidgetScale) {
-            const prepared = [];
-            const titleBottom = 40 + Math.max(14, mapWidth / 50) * 1.65;
-            const legendWidth = mapWidth * 0.42;
-            const legendHeight = Math.min(mapHeight * .20, legendWidth * 185 / 711);
-            const occupied = [
-                {x:0,y:0,width:mapWidth,height:titleBottom},
-                {x:mapWidth-20-legendWidth,y:titleBottom,width:legendWidth,height:legendHeight}
-            ];
-            const gap = Math.max(8, Math.min(mapWidth, mapHeight) / 240);
-            const margin = Math.max(8, gap);
+        // Limit the space occupied by tables; keep the user's map coordinates.
+        function fitExportTableSizes(items, mapW, mapH) {
+            const area = items.reduce((sum, item) => sum + item.width * item.height, 0);
+            const largestWidth = Math.max(1, ...items.map(item => item.width));
+            const largestHeight = Math.max(1, ...items.map(item => item.height));
+            const sizeLimit = Math.min(1, mapW * .08 / largestWidth, mapH * .15 / largestHeight);
+            const areaLimit = area > 0 ? Math.min(1, Math.sqrt(mapW * mapH * .18 / area)) : 1;
+            const fit = Math.min(sizeLimit, areaLimit);
+            return items.map(item => ({...item, width:item.width*fit, height:item.height*fit}));
+        }
 
+        async function prepareExportWidgetLayout(pdfWidgetScale) {
+            const matrix = mapGroup.getScreenCTM();
+            const mapScreenScale = matrix ? Math.hypot(matrix.a, matrix.b) : 0;
+            const candidates = [];
             for (const widget of mapWidgets) {
                 if (widget.tableX === null || widget.tableY === null) continue;
                 const widgetCanvas = await renderWidgetForExport(widget);
-                if (!widgetCanvas) continue;
-
-                let width = widgetCanvas.width / 3 * pdfWidgetScale;
-                let height = widgetCanvas.height / 3 * pdfWidgetScale;
-                const maxWidth = Math.max(1, mapWidth - margin * 2);
-                const maxHeight = Math.max(1, mapHeight - margin * 2);
-                const fitScale = Math.min(1, maxWidth / width, maxHeight / height);
-                width *= fitScale;
-                height *= fitScale;
-
-                const desired = {
-                    x: widget.tableX - width / 2,
-                    y: widget.tableY - height + 30,
-                    width,
-                    height
-                };
-                const rect = findFreeExportRect(
-                    desired, occupied, mapWidth, mapHeight, gap, margin
-                );
-                occupied.push(rect);
-                prepared.push({ widget, widgetCanvas, ...rect });
-                exportEstimate.textContent = `Подготовлено таблиц: ${prepared.length}`;
-                if (prepared.length % 20 === 0) await new Promise(resolve => setTimeout(resolve, 0));
+                const element = document.getElementById(widget.id);
+                const screenWidth = element ? element.getBoundingClientRect().width : 0;
+                // Match the map preview instead of multiplying by the source image width.
+                const previewWidth = screenWidth > 0 && mapScreenScale > 0
+                    ? screenWidth / mapScreenScale : widgetCanvas.pdfTable.width;
+                const width = previewWidth * pdfWidgetScale;
+                const height = width * widgetCanvas.pdfTable.height / widgetCanvas.pdfTable.width;
+                candidates.push({widget, widgetCanvas, width, height});
+                exportEstimate.textContent = `Подготовлено таблиц: ${candidates.length}`;
+                if (candidates.length % 20 === 0) await new Promise(resolve => setTimeout(resolve, 0));
             }
-            return prepared;
+            return fitExportTableSizes(candidates, mapWidth, mapHeight).map(item => ({
+                ...item,
+                x:Math.max(0, Math.min(mapWidth-item.width, item.widget.tableX-item.width/2)),
+                y:Math.max(0, Math.min(mapHeight-item.height, item.widget.tableY-item.height))
+            }));
         }
 
         function estimateExportSeconds() {
@@ -1834,7 +1828,7 @@
                 await image.decode();
                 ctx.drawImage(image, 0, 0, mapWidth, mapHeight);
 
-                const pdfWidgetScale = 1.5 * Math.max(1, mapWidth / 2400) * Number(document.getElementById('pdfTableSize').value);
+                const pdfWidgetScale = Number(document.getElementById('pdfTableSize').value);
                 const exportWidgets = await prepareExportWidgetLayout(pdfWidgetScale);
 
                 ctx.save();

@@ -96,8 +96,8 @@
             <button id="exportPdfBtn">Сохранить PDF</button>
             <label class="pdf-size-label">Таблицы в PDF
                 <select id="pdfTableSize" aria-label="Размер таблиц в PDF">
-                    <option value="1" selected>Крупные</option>
-                    <option value="1.35">Очень крупные</option>
+                    <option value="1" selected>Как на карте</option>
+                    <option value="1.35">Увеличенные</option>
                     <option value="0.8">Компактные</option>
                 </select>
             </label>
@@ -238,7 +238,7 @@
                         <li>Точку и таблицу можно перетаскивать мышью. Колесо мыши и кнопки справа изменяют масштаб.</li>
                         <li><strong>Обновить информацию</strong> пересчитывает таблицы после изменения периода или базы.</li>
                     </ul>
-                    <p class="help-note">При экспорте таблицы автоматически раздвигаются, если их прямоугольники пересекаются. Координаты сохранённого проекта при этом не меняются.</p>
+                    <p class="help-note">При экспорте сохраняется заданное расположение таблиц. Их размер ограничен, чтобы оставалась видна карта; текст в PDF можно приближать без потери чёткости.</p>
                 </section>
 
                 <section class="help-card">
