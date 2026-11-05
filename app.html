@@ -30,6 +30,7 @@
         <div class="brand-copy">
             <h1>Полигон контейнерных поездов</h1>
             <span class="brand-subtitle">Оперативная база и картографическая схема</span>
+            <span class="build-info">Версия 1.2.0 · сборка 05.11.2026</span>
         </div>
     </div>
     <div class="header-actions">
@@ -54,27 +55,32 @@
             <button id="loadJsonBtn">Загрузить проект JSON</button>
             <button id="groupToggleBtn" class="primary">Группировка</button>
             <span style="flex:1;"></span>
-            <div class="filter-area">
-                <select id="filterColumn">
-                    <option value="all">Все поля</option>
-                    <option value="year">Год</option>
-                    <option value="month">Месяц</option>
-                    <option value="codeFrom">Код отпр.</option>
-                    <option value="stationFrom">Станция отпр.</option>
-                    <option value="codeTo">Код назн.</option>
-                    <option value="stationTo">Станция назн.</option>
-                    <option value="type">Тип</option>
-                    <option value="count">Кол-во</option>
-                </select>
-                <input type="text" id="filterValue" placeholder="Значение фильтра">
-                <button class="filter-btn" id="applyFilterBtn">Применить</button>
-                <button class="filter-btn" id="clearFilterBtn" style="background:#e53e3e;">Сброс</button>
-            </div>
             <button id="editBtn" class="primary">Редактировать</button>
             <button id="saveEditBtn" class="success" style="display:none;">Сохранить</button>
             <button id="cancelEditBtn" class="danger" style="display:none;">Отменить</button>
             <span id="rowCount" style="color:#4a5568; font-weight:500; white-space:nowrap;">0 записей</span>
         </div>
+        <details class="filter-panel" open>
+        <summary>Фильтры базы данных <span id="filterPanelState">Все записи</span></summary>
+        <form id="dbFilters" class="db-filters" aria-label="Фильтры базы данных">
+            <div class="filter-heading"><strong>Фильтры</strong><span>Все заполненные условия применяются одновременно</span></div>
+            <div class="filter-grid">
+                <label class="filter-search">Поиск по всем полям<input id="filterValue" type="search" placeholder="Название, код или другое значение"></label>
+                <label>Тип<select id="filterType"><option value="">Все типы</option><option value="1">1 — ≤57 у.в.</option><option value="2">2 — ≤71 у.в.</option><option value="3">3 — ≤100 у.в.</option><option value="4">4 — ≤114 у.в.</option><option value="5">5 — ≤128 у.в.</option><option value="6">6 — ≥129 у.в.</option></select></label>
+                <label>Год<input id="filterYear" type="number" min="1900" max="2200" step="1" placeholder="Любой год"></label>
+                <label>Месяц<select id="filterMonth"><option value="">Все месяцы</option><option value="1">Январь</option><option value="2">Февраль</option><option value="3">Март</option><option value="4">Апрель</option><option value="5">Май</option><option value="6">Июнь</option><option value="7">Июль</option><option value="8">Август</option><option value="9">Сентябрь</option><option value="10">Октябрь</option><option value="11">Ноябрь</option><option value="12">Декабрь</option></select></label>
+                <label>Станция отправления<input id="filterStationFrom" list="stationsFromList" placeholder="Название или его часть"></label>
+                <label>Станция прибытия<input id="filterStationTo" list="stationsToList" placeholder="Название или его часть"></label>
+                <label>Код отправления<input id="filterCodeFrom" placeholder="Код или его часть"></label>
+                <label>Код прибытия<input id="filterCodeTo" placeholder="Код или его часть"></label>
+                <label>Поездов от<input id="filterCountMin" type="number" min="0" step="1" placeholder="Без ограничения"></label>
+                <label>Поездов до<input id="filterCountMax" type="number" min="0" step="1" placeholder="Без ограничения"></label>
+            </div>
+            <datalist id="stationsFromList"></datalist><datalist id="stationsToList"></datalist>
+            <div class="filter-actions"><button type="submit" class="primary" id="applyFilterBtn">Применить фильтры</button><button type="button" id="clearFilterBtn">Сбросить всё</button><span id="filterSummary" role="status" aria-live="polite">Фильтры не заданы</span></div>
+            <p id="filterError" class="filter-error" role="alert" hidden></p>
+        </form>
+        </details>
         <div class="table-wrap">
             <table>
                 <thead id="dbHeader">
@@ -180,7 +186,7 @@
                         <li><strong>Загрузить проект JSON</strong>: восстанавливает ранее сохранённый проект.</li>
                         <li><strong>Группировка</strong>: объединяет записи по месяцам для компактного просмотра.</li>
                         <li><strong>Редактировать</strong>: разрешает менять значения и удалять строки. Завершите работу кнопкой <strong>Сохранить</strong>.</li>
-                        <li><strong>Фильтр</strong>: ищет по всем полям или по выбранной колонке. Enter также запускает поиск.</li>
+                        <li><strong>Фильтр</strong>: позволяет одновременно задать тип, станции отправления и прибытия, их коды, год, месяц и диапазон количества поездов. Поиск по всем полям дополняет остальные условия. Enter применяет фильтры, «Сбросить всё» очищает их.</li>
                     </ul>
                     <p class="help-note">Импорт Excel добавляет данные, а не заменяет существующие. Перед повторной загрузкой того же месяца проверьте, нет ли дублей.</p>
                 </section>

@@ -45,8 +45,7 @@
         let nextId = 1;
         let isEditing = false;
         let editRecords = [];
-        let filterColumn = 'all';
-        let filterValue = '';
+        let activeFilters = {};
         let groupedView = false;
         let mapWidgets = [];
         let mapWidgetId = 0;
@@ -62,7 +61,7 @@
 
         const dbBody = document.getElementById('dbBody');
         const rowCount = document.getElementById('rowCount');
-        const filterColumnEl = document.getElementById('filterColumn');
+        const filtersForm = document.getElementById('dbFilters');
         const filterValueEl = document.getElementById('filterValue');
         const applyFilterBtn = document.getElementById('applyFilterBtn');
         const clearFilterBtn = document.getElementById('clearFilterBtn');
@@ -154,39 +153,83 @@
             return names[num-1] || '';
         }
 
+        const filterFields = {
+            search:'filterValue', type:'filterType', year:'filterYear', month:'filterMonth',
+            stationFrom:'filterStationFrom', stationTo:'filterStationTo',
+            codeFrom:'filterCodeFrom', codeTo:'filterCodeTo',
+            countMin:'filterCountMin', countMax:'filterCountMax'
+        };
+        function normalizeFilter(value) {
+            return String(value ?? '').trim().toLocaleLowerCase('ru').replaceAll('ё','е');
+        }
         function applyFilter() {
-            filterColumn = filterColumnEl.value;
-            filterValue = filterValueEl.value.trim().toLowerCase();
+            if (!filtersForm.reportValidity()) return;
+            const next = {};
+            for (const [field,id] of Object.entries(filterFields)) {
+                const value = document.getElementById(id).value.trim();
+                if (value !== '') next[field] = value;
+            }
+            const error = document.getElementById('filterError');
+            if (next.countMin !== undefined && next.countMax !== undefined && Number(next.countMin) > Number(next.countMax)) {
+                error.textContent = 'Количество «от» не должно быть больше количества «до».';
+                error.hidden = false;
+                return;
+            }
+            error.hidden = true;
+            activeFilters = next;
             renderTable();
         }
         function clearFilter() {
-            filterValueEl.value = '';
-            filterColumn = 'all';
-            filterValue = '';
-            filterColumnEl.value = 'all';
+            filtersForm.reset();
+            activeFilters = {};
+            document.getElementById('filterError').hidden = true;
             renderTable();
         }
+        function matchesFilters(rec, filters) {
+            for (const field of ['type','year','month']) {
+                if (filters[field] !== undefined && Number(rec[field]) !== Number(filters[field])) return false;
+            }
+            for (const field of ['stationFrom','stationTo','codeFrom','codeTo']) {
+                if (filters[field] !== undefined && !normalizeFilter(rec[field]).includes(normalizeFilter(filters[field]))) return false;
+            }
+            if (filters.countMin !== undefined && Number(rec.count) < Number(filters.countMin)) return false;
+            if (filters.countMax !== undefined && Number(rec.count) > Number(filters.countMax)) return false;
+            if (filters.search) {
+                const text = Object.values(rec).filter(v => v !== undefined && v !== null).join(' ') + ' ' + getMonthName(Number(rec.month));
+                if (!normalizeFilter(text).includes(normalizeFilter(filters.search))) return false;
+            }
+            return true;
+        }
         function getFilteredRecords(source) {
-            if (!filterValue) return source;
-            return source.filter(rec => {
-                if (filterColumn === 'all') {
-                    const str = Object.values(rec).filter(v => v !== undefined && v !== null).join(' ').toLowerCase();
-                    return str.includes(filterValue);
-                } else {
-                    const val = rec[filterColumn];
-                    if (val === undefined || val === null) return false;
-                    return String(val).toLowerCase().includes(filterValue);
-                }
+            return source.filter(rec => matchesFilters(rec, activeFilters));
+        }
+        let stationOptionsKey = '';
+        function updateFilterOptions(source) {
+            const from = [...new Set(source.map(r => String(r.stationFrom ?? '')).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
+            const to = [...new Set(source.map(r => String(r.stationTo ?? '')).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
+            const key = JSON.stringify([from,to]);
+            if (key === stationOptionsKey) return;
+            stationOptionsKey = key;
+            [[from,'stationsFromList'],[to,'stationsToList']].forEach(([values,id]) => {
+                const list = document.getElementById(id);
+                list.replaceChildren(...values.map(value => {
+                    const option = document.createElement('option'); option.value = value; return option;
+                }));
             });
         }
 
         function renderTable() {
             const source = isEditing ? editRecords : records;
             const filtered = getFilteredRecords(source);
+            updateFilterOptions(source);
+            const filterCount = Object.keys(activeFilters).length;
+            document.getElementById('filterSummary').textContent = filterCount
+                ? `Условий: ${filterCount} · найдено ${filtered.length} из ${source.length}` : 'Фильтры не заданы';
+            document.getElementById('filterPanelState').textContent = filterCount ? `${filterCount} условий · ${filtered.length} из ${source.length}` : 'Все записи';
             dbBody.innerHTML = '';
             if (filtered.length === 0) {
                 dbBody.innerHTML = `<tr><td colspan="9" class="empty-msg">Нет записей.</td></tr>`;
-                rowCount.textContent = records.length + ' записей';
+                rowCount.textContent = `${filtered.length} из ${source.length} записей`;
                 return;
             }
             if (groupedView) {
@@ -266,7 +309,7 @@
                 trTotal.style.fontWeight = 'bold';
                 trTotal.innerHTML = `<td colspan="9">Итого: ${grandTotal}</td>`;
                 dbBody.appendChild(trTotal);
-                rowCount.textContent = `Группировка: ${sortedKeys.length} месяцев, сумма ${grandTotal}`;
+                rowCount.textContent = `Найдено ${filtered.length} из ${source.length} · ${sortedKeys.length} месяцев · сумма ${grandTotal}`;
             } else {
                 const sorted = [...filtered].sort((a,b) => a.year - b.year || a.month - b.month);
                 sorted.forEach((rec) => {
@@ -358,7 +401,7 @@
                     tr.appendChild(tdDel);
                     dbBody.appendChild(tr);
                 });
-                rowCount.textContent = records.length + ' записей';
+                rowCount.textContent = `${filtered.length} из ${source.length} записей`;
             }
         }
 
@@ -677,9 +720,9 @@
         editBtn.addEventListener('click', enableEditing);
         saveEditBtn.addEventListener('click', saveEditing);
         cancelEditBtn.addEventListener('click', cancelEditing);
-        applyFilterBtn.addEventListener('click', applyFilter);
+        filtersForm.addEventListener('submit', function(e) { e.preventDefault(); applyFilter(); });
         clearFilterBtn.addEventListener('click', clearFilter);
-        filterValueEl.addEventListener('keydown', function(e) { if (e.key === 'Enter') applyFilter(); });
+
 
         tabs.forEach(btn => {
             btn.addEventListener('click', function() {
