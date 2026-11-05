@@ -1076,3 +1076,5 @@ td input:disabled, td select:disabled {
     .modal .search-box, .modal .modal-actions { padding-left: 16px; padding-right: 16px; }
 }
 .local-notice{padding:8px 24px;background:#eff6ff;color:#334155;font-size:13px}.monthly-tooltip{position:fixed;z-index:10000;max-width:min(420px,90vw);max-height:65vh;overflow:auto;padding:16px;background:#fff;color:#18263b;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 12px 40px #0003;font-size:13px;pointer-events:none}.monthly-tooltip[hidden]{display:none}.monthly-tooltip p{margin:8px 0;color:#64748b}.monthly-tooltip div{padding:4px 0;border-top:1px solid #eef2f6}.has-breakdown{cursor:help;text-decoration:underline dotted;text-underline-offset:3px}.has-breakdown:focus{outline:2px solid #2563eb}
+
+.monthly-tooltip .peak-month{background:#fef08a;color:#713f12;font-weight:700;border-radius:6px;padding:7px 8px;border:1px solid #eab308}.pdf-size-label{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ui-muted)}.pdf-size-label select{padding:8px;border:1px solid var(--ui-border);border-radius:7px;color:var(--ui-text);background:var(--ui-surface)}

@@ -1052,10 +1052,15 @@
                 const caption = document.createElement('p');
                 caption.textContent = 'Месяц · поездов / в сутки';
                 detailTip.append(caption);
+                const peak = Math.max(0, ...sums.values());
                 for (let k = b.yearFrom*12+b.monthFrom-1; k <= b.yearTo*12+b.monthTo-1; k++) {
                     const year = Math.floor(k/12), month = k%12+1, count = sums.get(k) || 0;
                     const line = document.createElement('div');
                     line.textContent = getMonthName(month) + ' ' + year + ' · ' + count + ' / ' + (count / new Date(year, month, 0).getDate()).toFixed(1);
+                    if (count > 0 && count === peak) {
+                        line.classList.add('peak-month');
+                        line.textContent += ' ★ Максимум';
+                    }
                     detailTip.append(line);
                 }
                 detailTip.hidden = false;
@@ -1629,21 +1634,41 @@
         async function renderWidgetForExport(widget) {
             const canvas = document.createElement('canvas');
             const rows = [['КРИТЕРИЙ', 'ЧЕТ', 'НЕЧЕТ'], ...widget.data.rows.map(r =>
-                [r.label, `${r.evenTotal} / ${r.evenAvg.toFixed(1)}`, `${r.oddTotal} / ${r.oddAvg.toFixed(1)}`]),
+                [r.label.replaceAll('≤', '<=').replaceAll('≥', '>='), `${r.evenTotal} / ${r.evenAvg.toFixed(1)}`, `${r.oddTotal} / ${r.oddAvg.toFixed(1)}`]),
                 ['Итого', `${widget.data.totalEven} / ${widget.data.avgEven.toFixed(1)}`, `${widget.data.totalOdd} / ${widget.data.avgOdd.toFixed(1)}`]];
-            const titleHeight = widget.isRemote ? 24 : 0;
-            canvas.width = 540; canvas.height = (rows.length*26 + titleHeight)*2;
-            const ctx = canvas.getContext('2d'); ctx.scale(2,2);
-            ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,270,canvas.height/2);
-            ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            if (widget.isRemote) { ctx.fillStyle='#1a202c'; ctx.fillText('№'+widget.number,135,12); }
-            rows.forEach((row,i) => row.forEach((text,j) => {
-                const x=j*90, y=titleHeight+i*26;
-                ctx.fillStyle=i===0?'#e2e8f0':j===1?'#fff4ed':j===2?'#eef6ff':'#ffffff';
-                ctx.fillRect(x,y,90,26); ctx.strokeStyle='#a0aec0'; ctx.lineWidth=.5; ctx.strokeRect(x,y,90,26);
-                ctx.fillStyle='#1a202c'; ctx.fillText(text,x+45,y+13,86);
-            }));
-            return canvas;
+            const ctx = canvas.getContext('2d');
+            const font = 'bold 16px sans-serif';
+            ctx.font = font;
+            const columns = [0,1,2].map(j => Math.ceil(Math.max(92, ...rows.map(row => ctx.measureText(row[j]).width + 24))));
+            const width = columns.reduce((a,b) => a+b,0);
+            const rowHeight = 34, titleHeight = widget.isRemote ? 30 : 0;
+            const height = rows.length * rowHeight + titleHeight;
+            // Measure layout only; the PDF uses vector text and borders.
+            return {width:width*3, height:height*3,
+                pdfTable:{rows,columns,width,height,rowHeight,titleHeight}};
+        }
+
+        function drawVectorPdfTable(pdf, item, exportScale) {
+            const t = item.widgetCanvas.pdfTable;
+            const scale = item.width / t.width * exportScale;
+            const originX = item.x * exportScale, originY = item.y * exportScale;
+            pdf.setFont('NotoSans', 'bold');
+            pdf.setFontSize(16 * scale * pdf.internal.scaleFactor);
+            pdf.setFillColor(255,255,255);
+            pdf.rect(originX,originY,t.width*scale,t.height*scale,'F');
+            pdf.setTextColor(17,24,39);
+            if (item.widget.isRemote) pdf.text('№'+item.widget.number,originX+t.width*scale/2,originY+15*scale,{align:'center',baseline:'middle'});
+            t.rows.forEach((row,i) => {
+                let x=0;
+                row.forEach((text,j) => {
+                    const y=t.titleHeight+i*t.rowHeight, w=t.columns[j];
+                    const rgb=i===0 || i===t.rows.length-1 ? [226,232,240]:j===1?[255,244,237]:j===2?[238,246,255]:[255,255,255];
+                    pdf.setFillColor(...rgb); pdf.setDrawColor(100,116,139); pdf.setLineWidth(.8*scale);
+                    pdf.rect(originX+x*scale,originY+y*scale,w*scale,t.rowHeight*scale,'FD');
+                    pdf.text(text,originX+(x+w/2)*scale,originY+(y+t.rowHeight/2)*scale,{align:'center',baseline:'middle'});
+                    x+=w;
+                });
+            });
         }
 
         function exportRectsOverlap(a, b, gap) {
@@ -1712,7 +1737,13 @@
 
         async function prepareExportWidgetLayout(pdfWidgetScale) {
             const prepared = [];
-            const occupied = [];
+            const titleBottom = 40 + Math.max(14, mapWidth / 50) * 1.65;
+            const legendWidth = mapWidth * 0.42;
+            const legendHeight = Math.min(mapHeight * .20, legendWidth * 185 / 711);
+            const occupied = [
+                {x:0,y:0,width:mapWidth,height:titleBottom},
+                {x:mapWidth-20-legendWidth,y:titleBottom,width:legendWidth,height:legendHeight}
+            ];
             const gap = Math.max(8, Math.min(mapWidth, mapHeight) / 240);
             const margin = Math.max(8, gap);
 
@@ -1721,8 +1752,8 @@
                 const widgetCanvas = await renderWidgetForExport(widget);
                 if (!widgetCanvas) continue;
 
-                let width = widgetCanvas.width / 2 * pdfWidgetScale;
-                let height = widgetCanvas.height / 2 * pdfWidgetScale;
+                let width = widgetCanvas.width / 3 * pdfWidgetScale;
+                let height = widgetCanvas.height / 3 * pdfWidgetScale;
                 const maxWidth = Math.max(1, mapWidth - margin * 2);
                 const maxHeight = Math.max(1, mapHeight - margin * 2);
                 const fitScale = Math.min(1, maxWidth / width, maxHeight / height);
@@ -1788,8 +1819,8 @@
             await waitForOverlayPaint();
             applyTheme('light');
             try {
-                const maxSide = 5000;
-                const exportScale = Math.min(1, maxSide / Math.max(mapWidth, mapHeight));
+                const maxSide = 16000;
+                const exportScale = Math.min(1, maxSide / Math.max(mapWidth, mapHeight), Math.sqrt(80000000 / (mapWidth * mapHeight)));
                 const canvas = document.createElement('canvas');
                 canvas.width = Math.max(1, Math.round(mapWidth * exportScale));
                 canvas.height = Math.max(1, Math.round(mapHeight * exportScale));
@@ -1803,7 +1834,7 @@
                 await image.decode();
                 ctx.drawImage(image, 0, 0, mapWidth, mapHeight);
 
-                const pdfWidgetScale = 1.5;
+                const pdfWidgetScale = 1.5 * Math.max(1, mapWidth / 2400) * Number(document.getElementById('pdfTableSize').value);
                 const exportWidgets = await prepareExportWidgetLayout(pdfWidgetScale);
 
                 ctx.save();
@@ -1844,16 +1875,6 @@
                         ctx.fillText(w.number.toString(), w.anchorX, w.anchorY);
                     }
                 });
-
-                for (const item of exportWidgets) {
-                    ctx.drawImage(
-                        item.widgetCanvas,
-                        item.x,
-                        item.y,
-                        item.width,
-                        item.height
-                    );
-                }
 
                 const isRange = periodType.value === 'range';
                 let yearFrom = parseInt(periodYearFrom.value) || 2026;
@@ -1903,8 +1924,13 @@
 
                 const { jsPDF } = window.jspdf;
                 const orientation = mapWidth >= mapHeight ? 'landscape' : 'portrait';
-                const pdf = new jsPDF({ orientation, unit: 'px', format: [canvas.width, canvas.height], hotfixes: ['px_scaling'], compress: true });
-                pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, canvas.width, canvas.height, undefined, 'FAST');
+                const pdf = new jsPDF({ orientation, unit: 'px', format: [canvas.width, canvas.height], hotfixes: ['px_scaling'], compress: true, putOnlyUsedFonts: true });
+                pdf.addFileToVFS('NotoSans-Bold.ttf', window.POLIGON_PDF_FONT);
+                pdf.addFont('NotoSans-Bold.ttf', 'NotoSans', 'bold');
+                pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height, undefined, 'FAST');
+                for (const item of exportWidgets) {
+                    drawVectorPdfTable(pdf, item, exportScale);
+                }
                 pdf.save(`карта_${new Date().toISOString().slice(0,10)}.pdf`);
             } catch (err) {
                 alert('Не удалось сформировать PDF: ' + err.message);

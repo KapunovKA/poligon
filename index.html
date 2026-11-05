@@ -94,6 +94,13 @@
             <span class="map-source-status" id="mapSourceStatus" title="Подложка карты">Подложка не загружена</span>
             <button id="refreshMapBtn">Обновить информацию</button>
             <button id="exportPdfBtn">Сохранить PDF</button>
+            <label class="pdf-size-label">Таблицы в PDF
+                <select id="pdfTableSize" aria-label="Размер таблиц в PDF">
+                    <option value="1" selected>Крупные</option>
+                    <option value="1.35">Очень крупные</option>
+                    <option value="0.8">Компактные</option>
+                </select>
+            </label>
             <button id="exportMapStateBtn">Сохранить проект JSON</button>
             <button id="importMapStateBtn">Загрузить проект JSON</button>
             <input type="file" id="importMapStateInput" accept=".json" hidden>
@@ -319,6 +326,7 @@
         </div>
     </div>
 </div>
+<script src="libs/pdf-font.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
