@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Полигон контейнерных поездов</title>
+
+    <!-- Favicon из папки icons -->
+    <link rel="icon" type="image/png" sizes="128x128" href="icons/icon128.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="icons/icon48.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="icons/icon16.png">
+
+    <!-- Шрифты Google -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Внешние CSS -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Локальные библиотеки -->
+    <script src="libs/xlsx.full.min.js"></script>
+
+    <script src="libs/jspdf.umd.min.js"></script>
+</head>
+<body>
+<div class="header">
+    <div class="brand">
+        <img class="brand-mark" src="icons/icon128.png" alt="Логотип полигона контейнерных поездов">
+        <div class="brand-copy">
+            <h1>Полигон контейнерных поездов</h1>
+            <span class="brand-subtitle">Оперативная база и картографическая схема</span>
+        </div>
+    </div>
+    <div class="header-actions">
+        <div class="tabs" role="tablist" aria-label="Разделы приложения">
+            <button class="active" data-tab="db" role="tab">База данных</button>
+            <button data-tab="map" role="tab">Карта</button>
+            <button data-tab="help" role="tab">Справка</button>
+        </div>
+        <button class="theme-toggle" id="themeToggle" aria-label="Включить тёмную тему" title="Сменить тему">
+            <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/>
+            </svg>
+        </button>
+    </div>
+</div>
+<div class="local-notice">Данные хранятся в этом браузере. Для переноса на другой ПК сохраните проект JSON и подложку карты.</div>
+<div class="content">
+    <div id="tab-db" class="tab-page active">
+        <div class="db-toolbar">
+            <button class="primary" id="importBtn">Импорт из Excel</button>
+            <button id="saveJsonBtn">Сохранить проект JSON</button>
+            <button id="loadJsonBtn">Загрузить проект JSON</button>
+            <button id="groupToggleBtn" class="primary">Группировка</button>
+            <span style="flex:1;"></span>
+            <div class="filter-area">
+                <select id="filterColumn">
+                    <option value="all">Все поля</option>
+                    <option value="year">Год</option>
+                    <option value="month">Месяц</option>
+                    <option value="codeFrom">Код отпр.</option>
+                    <option value="stationFrom">Станция отпр.</option>
+                    <option value="codeTo">Код назн.</option>
+                    <option value="stationTo">Станция назн.</option>
+                    <option value="type">Тип</option>
+                    <option value="count">Кол-во</option>
+                </select>
+                <input type="text" id="filterValue" placeholder="Значение фильтра">
+                <button class="filter-btn" id="applyFilterBtn">Применить</button>
+                <button class="filter-btn" id="clearFilterBtn" style="background:#e53e3e;">Сброс</button>
+            </div>
+            <button id="editBtn" class="primary">Редактировать</button>
+            <button id="saveEditBtn" class="success" style="display:none;">Сохранить</button>
+            <button id="cancelEditBtn" class="danger" style="display:none;">Отменить</button>
+            <span id="rowCount" style="color:#4a5568; font-weight:500; white-space:nowrap;">0 записей</span>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead id="dbHeader">
+                    <tr><th>Год</th><th>Месяц</th><th>Код отпр.</th><th>Станция отправления</th>
+                    <th>Код назн.</th><th>Станция назначения</th><th>Тип</th><th>Кол-во поездов</th>
+                    <th style="width:50px;" aria-label="Удаление"></th></tr>
+                </thead>
+                <tbody id="dbBody"></tbody>
+            </table>
+        </div>
+    </div>
+    <div id="tab-map" class="tab-page">
+        <div class="map-toolbar">
+            <button class="primary" id="generateTablesBtn">Сформировать таблицы</button>
+            <button id="loadMapBtn">Выбрать подложку</button>
+            <input type="file" id="mapFileInput" accept="image/*,.bmp" hidden>
+            <span class="map-source-status" id="mapSourceStatus" title="Подложка карты">Подложка не загружена</span>
+            <button id="refreshMapBtn">Обновить информацию</button>
+            <button id="exportPdfBtn">Сохранить PDF</button>
+            <button id="exportMapStateBtn">Сохранить проект JSON</button>
+            <button id="importMapStateBtn">Загрузить проект JSON</button>
+            <input type="file" id="importMapStateInput" accept=".json" hidden>
+            <div class="period-group">
+                <label style="font-weight:500;">Период:</label>
+                <select id="periodType">
+                    <option value="month">Конкретный месяц</option>
+                    <option value="range">Диапазон месяцев</option>
+                </select>
+                <input type="number" id="periodYearFrom" value="2026" min="2000" max="2100">
+                <select id="periodMonthFrom">
+                    <option value="1">Янв</option><option value="2">Фев</option><option value="3">Мар</option>
+                    <option value="4">Апр</option><option value="5">Май</option><option value="6">Июн</option>
+                    <option value="7">Июл</option><option value="8">Авг</option><option value="9">Сен</option>
+                    <option value="10">Окт</option><option value="11">Ноя</option><option value="12">Дек</option>
+                </select>
+                <span id="rangeSeparator" style="display:none;">—</span>
+                <input type="number" id="periodYearTo" value="2026" min="2000" max="2100" style="display:none;">
+                <select id="periodMonthTo" style="display:none;">
+                    <option value="1">Янв</option><option value="2">Фев</option><option value="3">Мар</option>
+                    <option value="4">Апр</option><option value="5">Май</option><option value="6">Июн</option>
+                    <option value="7">Июл</option><option value="8">Авг</option><option value="9">Сен</option>
+                    <option value="10">Окт</option><option value="11">Ноя</option><option value="12">Дек</option>
+                </select>
+            </div>
+            <div class="scale-group">
+                <label for="mapZoomRange">Масштаб карты</label>
+                <input type="range" id="mapZoomRange" min="25" max="500" step="5" value="100">
+                <span id="mapZoomPercent">100%</span>
+            </div>
+        </div>
+        <div class="map-container" id="mapContainer">
+            <svg id="mapSvg" viewBox="0 0 1400 1000" preserveAspectRatio="xMidYMid meet">
+                <g id="mapGroup">
+                    <image id="bgImage" width="1400" height="1000" />
+                </g>
+            </svg>
+            <svg class="connector-layer" id="connectorLayer" aria-hidden="true"></svg>
+            <div class="map-tables-container" id="mapTablesContainer"></div>
+            <img hidden class="map-legend-image" id="mapLegendImage" src="legend.png"
+                 alt="Условные обозначения карты" draggable="false">
+            <div class="placement-hint" id="placementHint"></div>
+            <div class="map-controls">
+                <button id="mapZoomIn">＋</button>
+                <button id="mapZoomOut">−</button>
+                <button id="mapReset">⟲</button>
+            </div>
+            <div class="zoom-info" id="mapZoomInfo">Масштаб: 100%</div>
+        </div>
+    </div>
+    <div id="tab-help" class="tab-page">
+        <div class="help-page">
+            <section class="help-hero">
+                <h2>Справка по работе с приложением</h2>
+                <p>Приложение хранит помесячные данные по участкам, рассчитывает среднесуточные размеры движения, размещает мини-таблицы на картографической подложке и экспортирует готовую схему в PDF.</p>
+            </section>
+
+            <div class="help-grid">
+                <section class="help-card">
+                    <h3>Быстрый порядок работы</h3>
+                    <ol>
+                        <li>На вкладке <strong>База данных</strong> нажмите <strong>Импорт из Excel</strong> и выберите файл.</li>
+                        <li>Укажите год и месяц, к которым относятся все строки импортируемого файла.</li>
+                        <li>Проверьте записи, при необходимости используйте фильтр или кнопку <strong>Редактировать</strong>.</li>
+                        <li>Перейдите на вкладку <strong>Карта</strong> и нажмите <strong>Выбрать подложку</strong>.</li>
+                        <li>Задайте месяц или диапазон месяцев и нажмите <strong>Сформировать таблицы</strong>.</li>
+                        <li>Выберите участки и режим: полный список из 6 типов или сокращённую группировку.</li>
+                        <li>Разместите точки и таблицы, затем нажмите <strong>Сохранить PDF</strong>.</li>
+                    </ol>
+                </section>
+
+                <section class="help-card">
+                    <h3>Что делают кнопки базы данных</h3>
+                    <ul>
+                        <li><strong>Импорт из Excel</strong>: добавляет строки из первого листа файла к уже имеющейся базе.</li>
+                        <li><strong>Сохранить проект JSON</strong>: сохраняет базу, период, выбранные участки, номера и координаты выносок.</li>
+                        <li><strong>Загрузить проект JSON</strong>: восстанавливает ранее сохранённый проект.</li>
+                        <li><strong>Группировка</strong>: объединяет записи по месяцам для компактного просмотра.</li>
+                        <li><strong>Редактировать</strong>: разрешает менять значения и удалять строки. Завершите работу кнопкой <strong>Сохранить</strong>.</li>
+                        <li><strong>Фильтр</strong>: ищет по всем полям или по выбранной колонке. Enter также запускает поиск.</li>
+                    </ul>
+                    <p class="help-note">Импорт Excel добавляет данные, а не заменяет существующие. Перед повторной загрузкой того же месяца проверьте, нет ли дублей.</p>
+                </section>
+
+                <section class="help-card wide">
+                    <h3>Форма таблицы Excel</h3>
+                    <p>Данные читаются только с первого листа. Используются первые шесть колонок строго в порядке A–F. Заголовок разрешён и будет пропущен, если в первой строке встречаются слова «код» и «станция».</p>
+                    <div class="help-table-wrap">
+                        <table class="help-table">
+                            <thead>
+                                <tr>
+                                    <th>A: Код отправления</th>
+                                    <th>B: Станция отправления</th>
+                                    <th>C: Код назначения</th>
+                                    <th>D: Станция назначения</th>
+                                    <th>E: Тип</th>
+                                    <th>F: Количество</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>001</code></td>
+                                    <td>Москва</td>
+                                    <td><code>002</code></td>
+                                    <td>Санкт-Петербург</td>
+                                    <td>1</td>
+                                    <td>25</td>
+                                </tr>
+                                <tr>
+                                    <td><code>002</code></td>
+                                    <td>Санкт-Петербург</td>
+                                    <td><code>001</code></td>
+                                    <td>Москва</td>
+                                    <td>2</td>
+                                    <td>18</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4>Требования к значениям</h4>
+                    <ul>
+                        <li>Коды и названия четырёх первых колонок обязательны. Строки без этих значений пропускаются.</li>
+                        <li>Коды лучше заранее задать в Excel как текст, чтобы сохранить ведущие нули, например <code>001</code>.</li>
+                        <li>Тип должен быть целым числом от 1 до 6. Пустое или неверное значение будет принято как тип 1.</li>
+                        <li>Количество должно быть целым числом. Пустое или неверное значение будет принято как 0.</li>
+                        <li>Год и месяц в Excel не требуются: они задаются в отдельном окне после выбора файла и применяются ко всем импортируемым строкам.</li>
+                    </ul>
+                </section>
+
+                <section class="help-card">
+                    <h3>Размещение объектов на карте</h3>
+                    <ul>
+                        <li><strong>Обычная выноска</strong>: создаётся небольшая точка без номера, таблица без названия и пунктирная линия между ними.</li>
+                        <li><strong>Удалённая выноска</strong>: точка и мини-таблица содержат только одинаковый номер. После создания точки щёлкните в месте таблицы и выберите нужный участок из списка.</li>
+                        <li>Точку и таблицу можно перетаскивать мышью. Колесо мыши и кнопки справа изменяют масштаб.</li>
+                        <li><strong>Обновить информацию</strong> пересчитывает таблицы после изменения периода или базы.</li>
+                    </ul>
+                    <p class="help-note">При экспорте таблицы автоматически раздвигаются, если их прямоугольники пересекаются. Координаты сохранённого проекта при этом не меняются.</p>
+                </section>
+
+                <section class="help-card">
+                    <h3>Подложка, легенда и PDF</h3>
+                    <ul>
+                        <li>Подложка выбирается отдельно как графический файл. Она не включается в JSON проекта.</li>
+                        <li>Файл условных обозначений должен называться <code>legend.png</code> и лежать в одной папке с <code>app.html</code>.</li>
+                        <li>Если легенда отсутствует или повреждена, PDF сформируется без неё.</li>
+                        <li>Во время экспорта показывается заставка с ориентировочным временем и счётчиком ожидания.</li>
+                        <li>Скорость зависит от размеров подложки, числа мини-таблиц и мощности компьютера. Не закрывайте страницу до начала скачивания.</li>
+                    </ul>
+                </section>
+
+                <section class="help-card wide">
+                    <h3>Рекомендуемое сохранение проекта</h3>
+                    <p>После размещения выносок сохраните проект JSON. Для полного восстановления рабочего места храните рядом <code>app.html</code>, JSON проекта и выбранную картографическую подложку. JSON содержит данные и координаты, но не содержит изображение подложки.</p>
+                </section>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="export-overlay" id="exportOverlay" role="dialog" aria-modal="true" aria-labelledby="exportOverlayTitle" aria-describedby="exportOverlayDescription">
+    <div class="export-progress-card">
+        <div class="export-spinner" aria-hidden="true"></div>
+        <h2 id="exportOverlayTitle">Формируется карта в PDF</h2>
+        <p id="exportOverlayDescription">Подготавливаем подложку, разводим мини-таблицы и собираем итоговый файл. Не закрывайте страницу.</p>
+        <div class="export-time">
+            <span id="exportEstimate">Подготовка…</span>
+            <span id="exportElapsed" aria-live="polite">Прошло: 0 сек.</span>
+        </div>
+    </div>
+</div>
+<!-- Модалки -->
+<div class="modal-overlay" id="periodModal">
+    <div class="modal">
+        <h2>Укажите период</h2>
+        <label>Год</label>
+        <input type="number" id="modalYear" value="2026" min="2000" max="2100">
+        <label>Месяц</label>
+        <select id="modalMonth">
+            <option value="1">Январь</option><option value="2">Февраль</option><option value="3">Март</option>
+            <option value="4">Апрель</option><option value="5">Май</option><option value="6">Июнь</option>
+            <option value="7">Июль</option><option value="8">Август</option><option value="9">Сентябрь</option>
+            <option value="10">Октябрь</option><option value="11">Ноябрь</option><option value="12">Декабрь</option>
+        </select>
+        <div class="modal-actions">
+            <button class="cancel" id="modalCancel">Отмена</button>
+            <button class="confirm" id="modalConfirm">Импортировать</button>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay" id="selectSegmentsModal">
+    <div class="modal">
+        <h2>Выберите перегоны для отображения</h2>
+        <div class="search-box">
+            <input type="text" id="segmentSearch" placeholder="Поиск по названию" autofocus>
+        </div>
+        <div class="modal-body" id="segmentsList"></div>
+        <div class="select-all">
+            <label><input type="checkbox" id="selectAllSegments" checked> Выбрать все</label>
+        </div>
+        <div class="modal-actions">
+            <button class="cancel" id="segmentsCancel">Отмена</button>
+            <button class="confirm" id="segmentsConfirm">Сформировать</button>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay" id="placeTableModal">
+    <div class="modal" style="max-width:400px;">
+        <h2>Выберите точку для размещения таблицы</h2>
+        <div class="modal-body" id="placeTableList"></div>
+        <div class="modal-actions">
+            <button class="cancel" id="placeTableCancel">Отмена</button>
+            <button class="confirm" id="placeTableConfirm">Разместить</button>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay" id="placeModeModal">
+    <div class="modal" style="max-width:400px;">
+        <h2>Размещение выноски</h2>
+        <p style="margin-bottom:16px;">Выберите способ размещения для участка <span id="placeModeTitle" style="font-weight:bold;"></span></p>
+        <div class="modal-actions" style="justify-content:center; gap:16px; border-top:none; padding-top:0;">
+            <!-- Кнопки создаются динамически -->
+        </div>
+    </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
